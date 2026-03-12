@@ -79,7 +79,7 @@ h1 {
     gap: 10px;
 }
 
-.rank-display, .score-display, .combo-display {
+.rank-display, .score-display, .combo-display, .level-display, .total-display {
     background: rgba(0, 0, 0, 0.6);
     padding: 10px 20px;
     border-radius: 12px;
@@ -88,6 +88,50 @@ h1 {
     font-weight: 700;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(5px);
+}
+
+.total-display {
+    border-color: rgba(255, 204, 0, 0.3);
+    color: #fff;
+    font-size: 0.95em;
+}
+
+.level-display {
+    border-color: #00ffcc;
+    color: #fff;
+    position: relative;
+    padding-bottom: 18px; /* space for xp bar */
+}
+
+.level-display span {
+    color: #00ffcc;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+}
+
+.xp-bar-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
+}
+
+.xp-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ccff, #00ffcc);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.high-score-text {
+    font-size: 0.6em;
+    color: #aaa;
+    font-weight: normal;
+    text-shadow: none;
+    margin-left: 5px;
 }
 
 .rank-display span {
@@ -287,6 +331,7 @@ h1 {
 
 /* Menus Container (Slide in/out) */
 .menus-container {
+    display: none; /* Keep hidden until opened */
     position: absolute;
     top: 150px;
     right: -350px; /* Hidden off-screen right */
@@ -301,20 +346,65 @@ h1 {
 .menus-container::-webkit-scrollbar { display: none; }
 
 .menus-container.open {
+    display: block;
     right: 20px;
 }
 
 /* Shop & Skills Panel Styles */
 .shop-panel, .skills-panel {
     width: 100%;
-    background: rgba(20, 10, 5, 0.95);
+    background: rgba(20, 10, 5, 0.85);
     border: 1px solid rgba(255, 69, 0, 0.4);
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
     color: #ddd;
     margin-bottom: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.reset-btn {
+    margin-top: 20px;
+    background: rgba(255, 0, 0, 0.2);
+    border: 1px solid rgba(255, 0, 0, 0.4);
+    color: #ff4444;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+    background: rgba(255, 0, 0, 0.4);
+    color: #fff;
+}
+
+.shop-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 400px) {
+    .menus-container {
+        width: 380px;
+    }
+    .shop-grid {
+        grid-template-columns: 1fr 1fr; /* Two column layout if wide enough */
+    }
+    .upgrade-item {
+        flex-direction: column;
+        align-items: flex-start;
+        position: relative;
+    }
+    .buy-btn {
+        margin-top: 10px;
+        align-self: flex-end;
+    }
 }
 
 .skills-panel {
@@ -345,14 +435,34 @@ h1 {
     align-items: center;
     background: rgba(255, 255, 255, 0.05);
     padding: 12px;
-    margin-bottom: 10px;
     border-radius: 10px;
     transition: all 0.2s ease;
+    border: 1px solid transparent;
 }
 
 .upgrade-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateX(-2px);
+    background: rgba(255, 69, 0, 0.1);
+    border-color: rgba(255, 69, 0, 0.4);
+    transform: translateY(-2px);
+}
+
+.upgrade-item.locked {
+    opacity: 0.5;
+    filter: grayscale(1);
+    pointer-events: none;
+}
+.upgrade-item.locked::after {
+    content: '🔒 Lvl ' attr(data-req-level);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8);
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: #ff4500;
+    font-weight: bold;
+    z-index: 10;
 }
 
 .upg-info h3 {
@@ -475,6 +585,16 @@ body.maka-bosada-mode h1 {
     /* Mix blend mode to make them look hotter when overlapping */
     mix-blend-mode: screen;
     /* No CSS animation for wobble anymore, handled by JS if needed, or static */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Fire emoji inside normal fireball */
+.fireball-target:not(.target-star):not(.target-bomb):not(.target-powerup)::before {
+    content: '🔥';
+    font-size: 50px;
+    filter: drop-shadow(0 0 10px #ff4500);
 }
 
 /* Star Target (Bonus points) */
@@ -523,8 +643,44 @@ body.maka-bosada-mode h1 {
     100% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
 }
 
+/* Power-Up Targets */
+.target-powerup {
+    border-radius: 50%;
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), inset 0 0 20px rgba(255, 255, 255, 0.8);
+    animation: pu-pulse 1s infinite alternate;
+}
+
+@keyframes pu-pulse {
+    0% { transform: scale(1); filter: brightness(1); }
+    100% { transform: scale(1.1); filter: brightness(1.5); }
+}
+
+.pu-fire {
+    background: radial-gradient(circle at 30% 30%, #fff, #ff4500, #8b0000);
+    box-shadow: 0 0 40px #ff4500, inset 0 0 30px #ffcc00;
+}
+.pu-fire::after { content: '🔥'; display: flex; justify-content: center; align-items: center; height: 100%; font-size: 40px; }
+
+.pu-slow {
+    background: radial-gradient(circle at 30% 30%, #fff, #00bfff, #00008b);
+    box-shadow: 0 0 40px #00bfff, inset 0 0 30px #88ccff;
+}
+.pu-slow::after { content: '⏳'; display: flex; justify-content: center; align-items: center; height: 100%; font-size: 40px; }
+
+.pu-shield {
+    background: radial-gradient(circle at 30% 30%, #fff, #00fa9a, #006400);
+    box-shadow: 0 0 40px #00fa9a, inset 0 0 30px #00ffcc;
+}
+.pu-shield::after { content: '🛡️'; display: flex; justify-content: center; align-items: center; height: 100%; font-size: 40px; }
+
+.pu-burst {
+    background: radial-gradient(circle at 30% 30%, #fff, #ffd700, #b8860b);
+    box-shadow: 0 0 40px #ffd700, inset 0 0 30px #ffcc00;
+}
+.pu-burst::after { content: '💥'; display: flex; justify-content: center; align-items: center; height: 100%; font-size: 40px; }
+
 /* Fire trail behind standard target */
-.fireball-target:not(.target-star):not(.target-bomb)::after {
+.fireball-target:not(.target-star):not(.target-bomb):not(.target-powerup)::after {
     content: '';
     position: absolute;
     top: 50%;
@@ -561,6 +717,15 @@ body.maka-bosada-mode h1 {
 @keyframes screen-red-flash {
     0% { background: rgba(255, 0, 0, 0.6); }
     100% { background: rgba(255, 0, 0, 0); }
+}
+
+.level-up-flash {
+    animation: screen-green-flash 0.5s ease-out;
+}
+
+@keyframes screen-green-flash {
+    0% { box-shadow: inset 0 0 100px 20px rgba(0, 255, 204, 0.8); }
+    100% { box-shadow: inset 0 0 100px 0px rgba(0, 0, 0, 0.8); }
 }
 
 /* Game State Overlay (Pause / Game Over) */
@@ -634,19 +799,23 @@ body.maka-bosada-mode h1 {
 }
 /* Intro Guide */
 .intro-title {
-    font-size: 3em;
+    font-size: clamp(2em, 5vw, 3em);
     color: #ffcc00;
     margin-bottom: 20px;
     text-shadow: 0 0 30px #ff4500;
     letter-spacing: 4px;
+    text-align: center;
 }
 
 .intro-body {
     text-align: left;
-    max-width: 500px;
+    max-width: 90%;
+    width: 500px;
     color: #eee;
-    font-size: 1.15em;
-    line-height: 1.7;
+    font-size: clamp(0.9em, 3vw, 1.15em);
+    line-height: 1.5;
+    padding: 0 15px;
+    box-sizing: border-box;
 }
 
 .controls-list {
@@ -656,14 +825,166 @@ body.maka-bosada-mode h1 {
 }
 
 .controls-list li {
-    margin: 6px 0;
+    margin: 4px 0;
+    font-size: 0.9em;
+}
+
+.controls-list kbd {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #fff;
 }
 
 .intro-start-btn {
-    margin-top: 30px;
-    padding: 15px 30px;
-    font-size: 1.5em;
+    margin-top: 20px;
+    padding: 12px 24px;
+    font-size: clamp(1.2em, 4vw, 1.5em);
     animation: pulse-glow 1.5s infinite alternate;
+}
+/* --- Enhanced Intro UI --- */
+.intro-card {
+    background: rgba(15, 15, 15, 0.95);
+    border: 1px solid rgba(255, 69, 0, 0.4);
+    border-radius: 24px;
+    padding: 2.5rem;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(255, 69, 0, 0.2), inset 0 0 20px rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(15px);
+    animation: cardEntrance 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes cardEntrance {
+    from { opacity: 0; transform: scale(0.8) translateY(30px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.intro-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 2rem;
+}
+
+.intro-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 4px;
+    margin: 0;
+    background: linear-gradient(to bottom, #fff 30%, #ff4500);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 5px 15px rgba(255, 69, 0, 0.3);
+}
+
+.fire-icon {
+    font-size: 1.8rem;
+    filter: drop-shadow(0 0 8px #ff4500);
+    animation: flicker 1.5s infinite alternate;
+}
+
+@keyframes flicker {
+    from { opacity: 0.7; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1.1); }
+}
+
+.intro-section {
+    margin-bottom: 1.2rem;
+    padding-left: 10px;
+    border-left: 3px solid var(--primary-glow);
+}
+
+.intro-section h3 {
+    font-size: 0.9rem;
+    margin: 0 0 5px 0;
+    color: #ff8c00;
+    letter-spacing: 1px;
+}
+
+.intro-section p {
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.5;
+    color: #ccc;
+}
+
+.intro-section.danger {
+    border-left-color: #ff2a00;
+}
+
+.intro-section.danger h3 {
+    color: #ff4500;
+}
+
+.intro-controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 2rem;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+}
+
+.control-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.control-item kbd {
+    background: #333;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    color: #fff;
+    font-size: 0.75rem;
+}
+
+.intro-start-btn {
+    width: 100%;
+    margin-top: 2.5rem;
+    padding: 1.2rem;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(45deg, #ff4500, #ff8c00);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(255, 69, 0, 0.4);
+}
+
+.intro-start-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 35px rgba(255, 69, 0, 0.6);
+}
+
+.intro-start-btn:active {
+    transform: translateY(0);
+}
+
+.btn-glow {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.intro-start-btn:hover .btn-glow {
+    opacity: 1;
 }
 
 @keyframes pulse-glow {

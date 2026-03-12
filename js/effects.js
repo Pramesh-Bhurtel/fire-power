@@ -14,9 +14,10 @@ function createFloatingText(x, y, amount, color = '#ffcc00') {
     text.className    = 'floating-text';
     text.textContent  = typeof amount === 'number' ? `+${amount}` : amount;
     text.style.color  = color;
-    text.style.left   = `${x}px`;
-    text.style.top    = `${y}px`;
-    document.body.appendChild(text);
+    // FIX: Clamp to viewport so text never goes off-screen
+    text.style.left   = `${Math.min(x, window.innerWidth - 120)}px`;
+    text.style.top    = `${Math.max(y, 10)}px`;
+    playArea.appendChild(text); // FIX: Use playArea, not body
     setTimeout(() => text.remove(), 1000);
 }
 
@@ -28,7 +29,7 @@ document.addEventListener('mousemove', (e) => {
     trail.className   = 'cursor-fire';
     trail.style.left  = `${e.clientX - 7}px`;
     trail.style.top   = `${e.clientY - 7}px`;
-    document.body.appendChild(trail);
+    playArea.appendChild(trail); // FIX: Use playArea not body
     setTimeout(() => trail.remove(), 400);
 });
 
@@ -43,7 +44,7 @@ function createFireParticles(x, y, intensity) {
         p.className = 'particle';
         const size = Math.random() * 8 + 4;
         p.style.cssText = `width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random() * colors.length)]};left:${x}px;top:${y}px;`;
-        document.body.appendChild(p);
+        playArea.appendChild(p); // FIX: Use playArea, not body
 
         const dx = (Math.random() - 0.5) * 200;
         const dy = -Math.random() * 200 - 50;
@@ -63,7 +64,7 @@ function createFireConfetti(x, y) {
         c.className = 'confetti';
         const w = Math.random() * 8 + 4, h = Math.random() * 4 + 2;
         c.style.cssText = `width:${w}px;height:${h}px;background:${colors[Math.floor(Math.random() * colors.length)]};border-radius:${Math.random() > 0.5 ? '2px' : '50%'};left:${x}px;top:${y}px;`;
-        document.body.appendChild(c);
+        playArea.appendChild(c); // FIX: Use playArea, not body
 
         const angle = Math.random() * Math.PI * 2;
         const vel   = 5 + Math.random() * 10;
@@ -84,7 +85,7 @@ function createInstagramFlames(x, y) {
         const w = 15 + Math.random() * 15, h = 25 + Math.random() * 25;
         const offset = (i - 3) * 15;
         f.style.cssText = `width:${w}px;height:${h}px;left:${x + offset}px;top:${y}px;`;
-        document.body.appendChild(f);
+        playArea.appendChild(f); // FIX: Use playArea, not body
 
         const anim = f.animate([
             { transform: 'translateY(0) scale(1)', opacity: 1 },
@@ -110,7 +111,6 @@ function triggerHitEffects(x, y, pointsGained) {
     // Advance combo (counter only — no extra score)
     handleCombo();
     updateRank();
-    updateShopUI();
 
     // Visual fx (capped intensity)
     const intensity = Math.min(combo, 10);

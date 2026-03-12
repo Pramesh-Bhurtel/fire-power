@@ -2,11 +2,12 @@
 // FIRE NINJA — game.js  (State & Lifecycle)
 // =========================================
 
-// ---- Game variables ----
+// Game variables
 let number = 0;
 let score  = 0;
-let combo  = 1;
+let combo  = 0;  // Starts at 0 so first hit shows x1
 let comboTimer;
+let _ultimateOnCooldown = false; // FIX: prevent Fire Ultimate loop past combo 15
 
 let isPaused    = true;   // Start paused for intro
 let isGameOver  = false;
@@ -19,17 +20,76 @@ let autoSparkValue  = 0;
 let bellowsMultiplier = 1;
 let shieldActive    = false;
 let currentRankIndex = 0;
+let highScore       = 0;
+
+// ---- Progression System ----
+let playerLevel     = 1;
+let playerXP        = 0;
+
+function getXPNeeded(level) {
+    return 100 * Math.pow(1.5, level - 1);
+}
 
 // ---- Upgrade / Skill costs ----
-const costs = {
-    baseFire : 50,
-    autoSpark: 200,
-    shield   : 5000,
-    nova     : 1000,
-    freeze   : 2000,
-    meteor   : 3000,
-    spirit   : 8000
+const INITIAL_COSTS = {
+    baseFire   : 25,
+    autoSpark  : 100,
+    bellows    : 800,
+    shield     : 2500,
+    nova       : 500,
+    freeze     : 1000,
+    meteor     : 1500,
+    spirit     : 4000
 };
+
+let costs = { ...INITIAL_COSTS };
+
+// ---- Settings / Save Data ----
+const SAVE_KEY = 'fireNinjaData';
+
+function saveGame() {
+    const data = {
+        score,
+        highScore,
+        playerLevel,
+        playerXP,
+        costs,
+        baseScore,
+        autoSparkValue,
+        currentRankIndex,
+        bellowsMultiplier
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+}
+
+function loadGame() {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+        try {
+            const data = JSON.parse(saved);
+            score             = data.score || 0;
+            highScore         = data.highScore || 0;
+            playerLevel       = data.playerLevel || 1;
+            playerXP          = data.playerXP || 0;
+            currentRankIndex  = data.currentRankIndex || 0;
+            bellowsMultiplier = data.bellowsMultiplier || 1;
+            
+            // Only load costs/upgrades if they exist to prevent breaking on old saves
+            if (data.costs) costs = data.costs;
+            if (data.baseScore) baseScore = data.baseScore;
+            if (data.autoSparkValue) autoSparkValue = data.autoSparkValue;
+        } catch (e) {
+            console.error('Failed to load save data:', e);
+        }
+    }
+}
+
+function resetProgress() {
+    if (confirm("Are you sure you want to reset all your progress? This cannot be undone!")) {
+        localStorage.removeItem(SAVE_KEY);
+        window.location.reload();
+    }
+}
 
 // ---- Ranks ----
 const ranks = [
@@ -46,6 +106,7 @@ const scoreDisplay   = document.getElementById('score');
 const rankDisplay    = document.getElementById('rank-name');
 const comboContainer = document.getElementById('combo-container');
 const comboDisplay   = document.getElementById('combo');
+const timerBar       = comboContainer.querySelector('.combo-timer-bar'); // Cache for perf
 const playArea       = document.getElementById('play-area');
 const missOverlay    = document.getElementById('miss-overlay');
 const stateOverlay   = document.getElementById('game-state-overlay');
@@ -54,7 +115,8 @@ const stateDesc      = document.getElementById('state-desc');
 const menusContainer = document.getElementById('menus-container');
 const pauseToggleBtn = document.getElementById('pause-toggle');
 const shieldStatus   = document.getElementById('shield-status');
-const makaAudio      = document.getElementById('maka-audio');
+const levelDisplay   = document.getElementById('player-level-display'); // Cache for perf
+const xpBarFill      = document.getElementById('xp-bar-fill');          // Cache for perf
 
 // =========================================
 //  COMBO
@@ -69,7 +131,6 @@ function handleCombo() {
 
     clearTimeout(comboTimer);
 
-    const timerBar = comboContainer.querySelector('.combo-timer-bar');
     timerBar.style.transition = 'none';
     timerBar.style.transform  = 'scaleX(1)';
     void timerBar.offsetWidth;
@@ -77,14 +138,23 @@ function handleCombo() {
     timerBar.style.transform  = 'scaleX(0)';
 
     comboTimer = setTimeout(() => {
-        combo = 1;
+        combo = 0;
         comboContainer.classList.add('hidden');
     }, 2000 * bellowsMultiplier);
+
+    // Combo 15 trigger: Fire Ultimate (with cooldown so it doesn't loop)
+    if (combo === 15 && !_ultimateOnCooldown) {
+        _ultimateOnCooldown = true;
+        setTimeout(() => { _ultimateOnCooldown = false; }, 3000);
+        triggerSkill('nova', true);
+        createFloatingText(window.innerWidth / 2 - 80, window.innerHeight / 2 - 100, '🔥 FIRE ULTIMATE! 🔥', '#ff4500');
+        playSound(1.0, 1.0, 'boom.mp3');
+    }
 }
 
 function breakCombo() {
     clearTimeout(comboTimer);
-    combo = 1;
+    combo = 0;
     comboContainer.classList.add('hidden');
 
     missOverlay.classList.remove('miss-flash');
@@ -103,13 +173,60 @@ function updateRank() {
 
             if (ranks[currentRankIndex].name === 'Maka Bosada Aag') {
                 document.body.classList.add('maka-bosada-mode');
-                makaAudio.preservesPitch = false;
-                makaAudio.playbackRate   = 0.2;
-                makaAudio.volume         = 1.0;
-                makaAudio.play().catch(() => {});
+                playSound(1.0, 1.0, 'boom.mp3');
             }
         }
     }
+}
+
+// =========================================
+//  PROGRESSION & XP LOGIC
+// =========================================
+function addXP(amount) {
+    playerXP += amount;
+    let leveledUp = false;
+
+    while (playerXP >= getXPNeeded(playerLevel)) {
+        playerXP -= getXPNeeded(playerLevel);
+        playerLevel++;
+        leveledUp = true;
+    }
+
+    if (leveledUp) {
+        playSound(1.0, 1.0, 'click2.mp3');
+        createFloatingText(window.innerWidth / 2 - 50, window.innerHeight / 2 - 50, 'LEVEL UP!', '#00ffcc');
+        playArea.classList.add('level-up-flash');
+        setTimeout(() => playArea.classList.remove('level-up-flash'), 500);
+        saveGame();
+        if (menusContainer.classList.contains('open')) updateShopUI(); // Unlock new skills
+    }
+
+    updateXpUI(); // FIX: Only update XP bar, not full score display
+}
+
+// Update only the XP bar and level (called from addXP)
+function updateXpUI() {
+    if (levelDisplay) levelDisplay.textContent = playerLevel;
+    if (xpBarFill) {
+        const xpNeeded  = getXPNeeded(playerLevel);
+        const xpPercent = Math.max(0, Math.min(100, (playerXP / xpNeeded) * 100));
+        xpBarFill.style.width = `${xpPercent}%`;
+    }
+}
+
+function updateProgressionUI() {
+    // Update Power (Currency)
+    scoreDisplay.innerHTML = `🔥 Power: ${score}`;
+    
+    // Update Total (Session Score) & Best (High Score)
+    const currentBest = Math.max(number, highScore);
+    numberDisplay.innerHTML = `${number} <span class="high-score-text">(Best: ${currentBest})</span>`;
+    
+    // Update Rank
+    rankDisplay.textContent = ranks[currentRankIndex].name;
+    
+    // Update XP Bar
+    updateXpUI();
 }
 
 // =========================================
@@ -118,6 +235,7 @@ function updateRank() {
 function updateShopUI() {
     document.getElementById('cost-base-fire').textContent  = costs.baseFire;
     document.getElementById('cost-auto-spark').textContent = costs.autoSpark;
+    document.getElementById('cost-bellows').textContent    = costs.bellows;
     document.getElementById('cost-nova').textContent    = costs.nova;
     document.getElementById('cost-freeze').textContent  = costs.freeze;
     document.getElementById('cost-meteor').textContent  = costs.meteor;
@@ -126,6 +244,7 @@ function updateShopUI() {
 
     document.querySelector('#upg-base-fire .buy-btn').disabled  = score < costs.baseFire;
     document.querySelector('#upg-auto-spark .buy-btn').disabled = score < costs.autoSpark;
+    document.querySelector('#upg-bellows .buy-btn').disabled    = score < costs.bellows;
     document.querySelector('#skill-nova .buy-btn').disabled     = score < costs.nova;
     document.querySelector('#skill-freeze .buy-btn').disabled   = score < costs.freeze;
     document.querySelector('#skill-meteor .buy-btn').disabled   = score < costs.meteor;
@@ -140,6 +259,14 @@ function updateShopUI() {
         shieldBtn.disabled = score < costs.shield;
         shieldStatus.classList.add('hidden');
     }
+
+    // Handle Level Restrictions for Skills
+    document.querySelectorAll('.skills-panel .upgrade-item').forEach(item => {
+        const reqLevel = item.getAttribute('data-req-level');
+        if (reqLevel) {
+            item.classList.toggle('locked', playerLevel < parseInt(reqLevel));
+        }
+    });
 }
 
 // =========================================
@@ -147,8 +274,10 @@ function updateShopUI() {
 // =========================================
 window.closeIntro = function() {
     document.getElementById('intro-guide').classList.add('hidden');
-    isPaused = false;
-    startSpawnerOnce(); // safe single start
+    loadGame();            // Load save FIRST so UI has correct values
+    updateProgressionUI(); // Initialize UI from loaded data
+    isPaused = false;      // Then unpause
+    startSpawnerOnce();    // Safe single start
 };
 
 // =========================================
@@ -180,7 +309,7 @@ window.togglePause = function() {
 //  GAME OVER
 // =========================================
 function gameOver() {
-    new Audio('assets/audio/boom.mp3').play().catch(() => {});
+    playSound(1.0, 1.0, 'boom.mp3');
     isGameOver = true;
 
     stateOverlay.classList.remove('hidden');
@@ -195,18 +324,30 @@ function gameOver() {
 }
 
 function restartGame() {
+    if (number > highScore) highScore = number;
+
+    // Hard Reset EVERYTHING on Game Over (except High Score)
     score             = 0;
     number            = 0;
-    combo             = 1;
+    combo             = 0;
+    playerLevel       = 1;
+    playerXP          = 0;
+    currentRankIndex  = 0;
     baseScore         = 1;
     autoSparkValue    = 0;
     bellowsMultiplier = 1;
+    
+    costs = { ...INITIAL_COSTS };
+
     shieldActive      = false;
     isGameOver        = false;
     isPaused          = false;
-    currentRankIndex  = 0;   // FIX: reset rank
     isTimeFrozen      = false;
     autoSlashActive   = false;
+    _ultimateOnCooldown = false;
+
+    // Persist the wipe
+    saveGame();
 
     // Clean up ultimate mode CSS
     document.body.classList.remove('maka-bosada-mode');
@@ -214,8 +355,7 @@ function restartGame() {
     stateOverlay.classList.add('hidden');
     stateOverlay.onclick = null;
 
-    scoreDisplay.textContent   = score;
-    numberDisplay.textContent  = number;
+    updateProgressionUI();
     rankDisplay.textContent    = ranks[0].name;
     comboContainer.classList.add('hidden');
 
@@ -224,6 +364,10 @@ function restartGame() {
     menusContainer.classList.remove('open');
 
     document.querySelectorAll('.fireball-target').forEach(t => t.remove());
+
+    // FIX: Use exposed resetSpawner() instead of touching the private variable
+    resetSpawner();
+
     updateShopUI();
     startSpawnerOnce();
 }
@@ -244,14 +388,20 @@ window.buyUpgrade = function(type) {
             autoSparkValue++;
             costs.autoSpark = Math.floor(costs.autoSpark * 1.5);
             break;
+        case 'bellows':
+            bellowsMultiplier = Math.min(bellowsMultiplier + 0.5, 4.0); // Max 4x window
+            costs.bellows = Math.floor(costs.bellows * 2.0);
+            createFloatingText(window.innerWidth / 2 - 80, window.innerHeight / 2, '⏱ COMBO WINDOW EXTENDED!', '#ffcc00');
+            break;
         case 'shield':
             shieldActive = true;
             costs.shield = Math.floor(costs.shield * 1.5);
             break;
     }
 
-    scoreDisplay.textContent = score;
+    updateProgressionUI();
     updateShopUI();
+    saveGame();
 };
 
 // Auto-Spark
@@ -259,10 +409,15 @@ setInterval(() => {
     if (isPaused || isGameOver || autoSparkValue === 0) return;
     score  += autoSparkValue;
     number += autoSparkValue;
-    numberDisplay.textContent = number;
-    scoreDisplay.textContent  = score;
+    // XP and Rank
+    addXP(autoSparkValue);
     updateRank();
-    updateShopUI();
+    
+    // Unify UI update
+    updateProgressionUI();
+    
+    // FIX: Only update shop UI if menu is open (saves DOM reflow)
+    if (menusContainer.classList.contains('open')) updateShopUI();
 }, 1000);
 
 // =========================================
@@ -273,9 +428,18 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         window.togglePause();
     } else if (!isPaused && !isGameOver) {
-        if (e.key === 'a' || e.key === 'A') window.triggerSkill('nova');
-        else if (e.key === 's' || e.key === 'S') window.triggerSkill('freeze');
-        else if (e.key === 'd' || e.key === 'D') window.triggerSkill('meteor');
-        else if (e.key === 'w' || e.key === 'W') window.triggerSkill('spirit');
+        const keyMap = { 'a': 'nova', 's': 'freeze', 'd': 'meteor', 'w': 'spirit' };
+        const skillType = keyMap[e.key.toLowerCase()];
+        if (!skillType) return;
+
+        // FIX: Show feedback if skill is level-locked
+        const reqLevelMap = { nova: 1, freeze: 5, meteor: 10, spirit: 15 };
+        const reqLvl = reqLevelMap[skillType];
+        if (playerLevel < reqLvl) {
+            createFloatingText(window.innerWidth / 2 - 80, window.innerHeight / 2, `🔒 Reach Level ${reqLvl}!`, '#ff4500');
+            return;
+        }
+
+        window.triggerSkill(skillType);
     }
 });

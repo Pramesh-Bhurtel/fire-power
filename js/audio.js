@@ -2,23 +2,32 @@
 // FIRE NINJA — audio.js  (Sound Engine)
 // =========================================
 
-// Pre-warm a pool of Audio objects for rapid playback without lag
-const AUDIO_POOL_SIZE = 8;
-const audioPool = Array.from({ length: AUDIO_POOL_SIZE }, () => {
-    const a = new Audio('assets/audio/click.mp3');
-    a.preload = 'auto';
-    return a;
-});
-let poolIndex = 0;
+const pools = {};
+const AUDIO_POOL_SIZE = 5;
 
 /**
- * Play click.mp3 at a dynamic pitch and volume.
+ * Play an audio file at a dynamic pitch and volume.
  * @param {number} pitch  - playbackRate (0.1 = very low boom, 3.0 = high squeak)
  * @param {number} volume - 0.0 to 1.0
+ * @param {string} soundName - the filename of the sound to play (required)
  */
-function playSound(pitch = 1.0, volume = 1.0) {
-    const sound = audioPool[poolIndex];
-    poolIndex = (poolIndex + 1) % AUDIO_POOL_SIZE;
+function playSound(pitch = 1.0, volume = 1.0, soundName) {
+    if (!soundName) {
+        console.warn("playSound called without soundName! Defaulting to click.mp3");
+        soundName = 'click.mp3';
+    }
+    if (!pools[soundName]) {
+        pools[soundName] = { pool: [], index: 0 };
+        for (let i = 0; i < AUDIO_POOL_SIZE; i++) {
+            const a = new Audio(`assets/audio/${soundName}`);
+            a.preload = 'auto';
+            pools[soundName].pool.push(a);
+        }
+    }
+    
+    const poolData = pools[soundName];
+    const sound = poolData.pool[poolData.index];
+    poolData.index = (poolData.index + 1) % AUDIO_POOL_SIZE;
 
     sound.currentTime  = 0;
     sound.preservesPitch = false;
